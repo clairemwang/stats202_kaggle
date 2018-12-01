@@ -1,0 +1,89 @@
+---
+title: "Stats 202 Kaggle - K Nearest Neighbors"
+author: "Claire Wang & Vikas Maturi"
+date: "11/30/2018"
+output: html_document
+---
+
+# Libraries and Files
+```{r}
+library(tidyverse)
+library(glmnet)
+library(class)
+
+file_train <- "C:/Users/Claire/Downloads/train_data.csv"
+file_test <- "C:/Users/Claire/Downloads/test_data.csv"
+
+train_data <- file_train %>% read_csv()
+test_data <- file_test %>% read_csv()
+```
+
+# Split train into train/validate for KNN
+```{r}
+set.seed(1)
+index <- sample(1:nrow(train_data), 0.75 * nrow(train_data))
+
+df.train <- train_data[index, ]
+df.validate <- train_data[-index, ]
+```
+
+# KNN
+```{r}
+# Create matrices with training predictors
+train.X <- as.matrix(df.train %>% select(-Status))
+test.X <- as.matrix(df.validate %>% select(-Status))
+train.Y <- as.matrix(df.train$Status)
+
+# Cross validation to find optimal K
+prediction_rate <- vector()
+num_k <- seq(1, 100, 1)
+
+set.seed(1)
+for (i in 1:100) {
+  knn.pred <- knn(train.X, test.X, train.Y, k = i)
+  prediction_rate[i] = mean(knn.pred == df.validate$Status)
+}
+
+# Visualize results
+as.data.frame(cbind(num_k, prediction_rate)) %>%
+  ggplot(mapping = aes(x = num_k, y = prediction_rate)) +
+  geom_line() +
+  geom_point()
+
+# Find specific K
+as.data.frame(cbind(num_k, prediction_rate)) %>%
+  filter(prediction_rate > 0.57)
+
+```
+
+The prediction rate is highest when K = 47, so we will use K = 47.
+
+```{r}
+# Validation Error for K = 47
+knn.pred <- knn(train.X, test.X, train.Y, k = 47)
+table(knn.pred, df.validate$Status)
+```
+
+# Run KNN on full training data, test on full test. 
+```{r}
+# Create matrices with training predictors
+train.X.final <- as.matrix(train_data %>% select(-Status))
+test.X.final <- as.matrix(test_data)
+train.Y.final <- as.matrix(train_data$Status)
+
+# Fit KNN model
+knn.pred.final <- knn(train.X.final, test.X.final, train.Y.final, k = 47)
+```
+
+
+```{r}
+submission1 <- 
+  as.tibble(knn.pred.final) %>% 
+  transmute(Category = if_else(value == 1, TRUE, FALSE)) %>% 
+  cbind(test_data$Id) %>% 
+  rename(Id = `test_data$Id`) %>% 
+  dplyr::select(Id, Category)
+
+write_csv(submission1, path = "C:/Users/Claire/Documents/kaggle1.csv")
+```
+
